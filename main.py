@@ -80,14 +80,12 @@ class TraceMoePlugin(Star):
 
     def format_time(self, seconds: float) -> str:
         """将秒数格式化为时分秒"""
-        minutes = int(seconds // 60)
-        seconds = int(seconds % 60)
-        if minutes >= 60:
-            hours = minutes // 60
-            minutes = minutes % 60
-            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        m, s = divmod(int(seconds), 60)
+        h, m = divmod(m, 60)
+        if h > 0:
+            return f"{h:02d}:{m:02d}:{s:02d}"
         else:
-            return f"{minutes:02d}:{seconds:02d}"
+            return f"{m:02d}:{s:02d}"
 
     def format_search_result(self, result_data: Dict[str, Any]) -> str:
         """格式化搜索结果"""
@@ -207,10 +205,6 @@ class TraceMoePlugin(Star):
         """搜索动漫场景 - 发送图片来识别动漫出处"""
         try:
             message_str = event.message_str.strip()
-            
-            if "help" in message_str.lower():
-                return
-                
             message_chain = event.get_messages()
             images = self.extract_images_from_message(message_chain)
             
@@ -231,7 +225,7 @@ class TraceMoePlugin(Star):
             
             image_data = await self.download_image_from_component(images[0])
             
-            cut_borders = "cut" in message_str.lower() or "cutborders" in message_str.lower()
+            cut_borders = message_str.lower().startswith("/tracemoe cut")
             
             result = await self.search_by_image_data(image_data, cut_borders=cut_borders)
             
