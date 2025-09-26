@@ -9,7 +9,7 @@ from astrbot.api.message_components import Image
     "search_tracemoe",
     "PaloMiku",
     "基于 Trace.moe API 的动漫截图场景识别插件",
-    "1.0.0"
+    "1.0.1"
 )
 class TraceMoePlugin(Star):
     def __init__(self, context: Context):
