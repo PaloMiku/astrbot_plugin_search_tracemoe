@@ -1,0 +1,14 @@
+{
+  "api_base": {
+    "type": "string",
+    "description": "Trace.moe API 基础地址",
+    "default": "https://api.trace.moe",
+    "hint": "设置 trace.moe 的 API 基础地址。"
+  },
+  "max_results": {
+    "type": "int",
+    "description": "最大显示返回结果数量",
+    "default": 3,
+    "hint": "设置搜索结果最多显示多少条记录（默认为 3 条），数量过多可能导致消息过长。"
+  }
+}

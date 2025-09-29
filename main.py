@@ -2,20 +2,27 @@ import aiohttp
 from typing import Optional, Dict, Any, List
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
-from astrbot.api import logger
+from astrbot.api import logger, AstrBotConfig
 from astrbot.api.message_components import Image
 
 @register(
     "search_tracemoe",
     "PaloMiku",
     "基于 Trace.moe API 的动漫截图场景识别插件",
-    "1.0.1"
+    "1.0.2"
 )
 class TraceMoePlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
-        self.api_base = "https://api.trace.moe"
+        self.api_base = config.get("api_base", "https://api.trace.moe")
+        self.max_results = config.get("max_results", 3)
+        if self.max_results < 1:
+            self.max_results = 1
+        elif self.max_results > 10:
+            self.max_results = 10
+        
         self.session: Optional[aiohttp.ClientSession] = None
+        logger.info(f"TraceMoe 插件已加载，使用 API 地址: {self.api_base}，最大结果数量: {self.max_results}")
 
     async def initialize(self):
         """初始化 HTTP 会话"""
@@ -98,7 +105,7 @@ class TraceMoePlugin(Star):
             
         output_lines = ["🔍 动漫场景识别结果：\n"]
         
-        for i, result in enumerate(results[:3], 1):
+        for i, result in enumerate(results[:self.max_results], 1):
             similarity = result.get("similarity", 0) * 100
             
             anilist_info = result.get("anilist")
