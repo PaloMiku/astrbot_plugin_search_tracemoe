@@ -311,7 +311,7 @@ class TraceMoePlugin(Star):
             if self.api_key:
                 quota_info += "\n🔑 使用 API 密钥认证"
             else:
-                masked_ip = user_id[:8] + "****" if len(user_id) > 4 else "****"
+                masked_ip = user_id[:8] + "****" if len(user_id) > 12 else "****"
                 quota_info += f"\n🌐 访客模式 (IP: {masked_ip})"
                 
             yield event.plain_result(quota_info)
