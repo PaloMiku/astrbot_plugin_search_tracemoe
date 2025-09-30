@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any, List
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger, AstrBotConfig
-from astrbot.api.message_components import Image
+from astrbot.api.message_components import Image, Plain
 
 @register(
     "search_tracemoe",
@@ -26,21 +26,16 @@ class TraceMoePlugin(Star):
         
         self.session: Optional[aiohttp.ClientSession] = None
         
-        log_msg = f"TraceMoe 插件已加载，API 地址: {self.api_base}，最大结果数量: {self.max_results}"
-        if self.api_key:
-            log_msg += "，使用 API 密钥"
-        else:
-            log_msg += "，访客模式"
-        if self.enable_preview:
-            log_msg += "，启用图片预览"
-        logger.info(log_msg)
+        auth_mode = "API 密钥" if self.api_key else "访客模式"
+        preview_status = "启用" if self.enable_preview else "禁用"
+        logger.info(f"TraceMoe 插件已加载，API: {self.api_base}，最大结果: {self.max_results}，认证: {auth_mode}，预览: {preview_status}")
 
     async def initialize(self):
         """初始化 HTTP 会话"""
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=30),
             headers={
-                "User-Agent": "AstrBot-TraceMoe-Plugin/1.0.6"
+                "User-Agent": "AstrBot-TraceMoe-Plugin/1.0.7"
             }
         )
         logger.info("TraceMoe 插件初始化完成")
@@ -79,27 +74,23 @@ class TraceMoePlugin(Star):
                     return result
                 else:
                     raise ValueError(self._handle_http_error(response.status, "搜索"))
-        except aiohttp.ClientTimeout:
-            raise ValueError("搜索请求超时，请稍后再试")
-        except aiohttp.ClientError as e:
-            raise ValueError(f"网络连接错误: {str(e)}")
+        except (aiohttp.ClientTimeout, aiohttp.ClientError) as e:
+            error_type = "请求超时" if isinstance(e, aiohttp.ClientTimeout) else "网络连接错误"
+            raise ValueError(f"{error_type}，请稍后再试: {str(e) if not isinstance(e, aiohttp.ClientTimeout) else ''}")
 
     def _handle_http_error(self, status_code: int, operation: str = "请求") -> str:
         """统一处理HTTP错误状态码"""
-        if status_code == 400:
-            return "无效的请求数据或处理失败"
-        elif status_code == 402:
-            return "触及 API 并发限制或配额用尽"
-        elif status_code == 403:
-            return "无效的 API 密钥或无权限访问"
-        elif status_code == 404:
-            return "资源不存在或已失效"
-        elif status_code == 413:
-            return "文件过大（超过25MB）"
-        elif status_code == 429:
-            return "请求过于频繁，请稍后再试"
-        elif status_code == 503:
-            return "服务暂时不可用，请稍后再试"
+        error_map = {
+            400: "无效的请求数据或处理失败",
+            402: "触及 API 并发限制或配额用尽",
+            403: "无效的 API 密钥或无权限访问",
+            404: "资源不存在或已失效",
+            413: "文件过大（超过25MB）",
+            429: "请求过于频繁，请稍后再试",
+            503: "服务暂时不可用，请稍后再试"
+        }
+        if status_code in error_map:
+            return error_map[status_code]
         elif status_code >= 500:
             return "服务器内部错误，请稍后再试"
         else:
@@ -129,10 +120,9 @@ class TraceMoePlugin(Star):
                     return await response.json()
                 else:
                     raise ValueError(self._handle_http_error(response.status, "查询配额"))
-        except aiohttp.ClientTimeout:
-            raise ValueError("查询请求超时，请稍后再试")
-        except aiohttp.ClientError as e:
-            raise ValueError(f"网络连接错误: {str(e)}")
+        except (aiohttp.ClientTimeout, aiohttp.ClientError) as e:
+            error_type = "查询超时" if isinstance(e, aiohttp.ClientTimeout) else "网络连接错误"
+            raise ValueError(f"{error_type}，请稍后再试: {str(e) if not isinstance(e, aiohttp.ClientTimeout) else ''}")
 
     def format_time(self, seconds: float) -> str:
         """将秒数格式化为时分秒"""
@@ -145,7 +135,6 @@ class TraceMoePlugin(Star):
 
     async def format_search_result(self, result_data: Dict[str, Any]) -> List:
         """格式化搜索结果，返回消息链"""
-        from astrbot.api.message_components import Plain
         
         if result_data.get("error"):
             return [Plain(f"搜索出错: {result_data['error']}")]
@@ -232,22 +221,23 @@ class TraceMoePlugin(Star):
                     return image_data
                 else:
                     raise ValueError(self._handle_http_error(response.status, "下载图片"))
-        except aiohttp.ClientTimeout:
-            raise ValueError("下载图片超时，请稍后再试")
-        except aiohttp.ClientError as e:
-            raise ValueError(f"网络连接错误: {str(e)}")
+        except (aiohttp.ClientTimeout, aiohttp.ClientError) as e:
+            error_type = "下载超时" if isinstance(e, aiohttp.ClientTimeout) else "网络连接错误"
+            raise ValueError(f"{error_type}，请稍后再试: {str(e) if not isinstance(e, aiohttp.ClientTimeout) else ''}")
 
-    @filter.command("tracemoe help")  
+
+
+    @filter.command("tracemoe help")
     async def show_info(self, event: AstrMessageEvent):
         """显示插件使用帮助"""
         info_text = """🎌 TraceMoe 动漫场景识别插件
 
 📝 功能说明：
 通过图片识别动漫截图出处，基于 trace.moe API
+自动裁切黑边，提高识别准确度
 
 🎯 使用方法：
-• /tracemoe + 图片 - 标准图片搜索
-• /tracemoe cut + 图片 - 自动裁切黑边后搜索
+• /tracemoe + 图片 - 自动裁切黑边搜索
 
 📊 结果说明：
 • 相似度 ≥90% - 结果较准确
@@ -259,37 +249,38 @@ class TraceMoePlugin(Star):
 • 推荐尺寸：640x360px
 • 文件大小限制：25MB
 
-⚙️ 高级选项：
-• cut - 自动裁切黑边，提高识别准确度
-• 适用于手机截图等包含黑边的图片
-"""
+✨ 特色功能：
+• 自动裁切黑边，适用于手机截图
+• 智能识别，提高匹配准确度
+
+🔑 管理员命令：
+• /tracemoe me - 查询 API 使用配额"""
 
         yield event.plain_result(info_text)
-        event.stop_event()  # 停止事件传播，防止重复执行
+        event.stop_event()
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("tracemoe me")
     async def show_quota(self, event: AstrMessageEvent):
         """查询API使用配额"""
         try:
-            # 确保会话已初始化
-            if not self.session:
-                await self.initialize()
-            
             yield event.plain_result("🔍 正在查询API使用配额...")
             
             quota_data = await self.get_user_quota()
             
             user_id = quota_data.get("id", "未知")
             
-            try:
-                priority = int(quota_data.get("priority", 0))
-                concurrency = int(quota_data.get("concurrency", 1))
-                quota = int(quota_data.get("quota", 0))
-                quota_used = int(quota_data.get("quotaUsed", 0))
-            except (ValueError, TypeError) as e:
-                logger.warning(f"配额数据类型转换失败: {e}")
-                priority, concurrency, quota, quota_used = 0, 1, 0, 0
+            # 安全转换配额数据
+            def safe_int(value, default):
+                try:
+                    return int(value)
+                except (ValueError, TypeError):
+                    return default
+                    
+            priority = safe_int(quota_data.get("priority"), 0)
+            concurrency = safe_int(quota_data.get("concurrency"), 1)
+            quota = safe_int(quota_data.get("quota"), 0)
+            quota_used = safe_int(quota_data.get("quotaUsed"), 0)
             
             quota_remaining = quota - quota_used
             usage_rate = (quota_used/quota*100) if quota > 0 else 0
@@ -322,25 +313,13 @@ class TraceMoePlugin(Star):
             yield event.plain_result("❌ 查询配额时发生未知错误，请稍后再试")
             event.stop_event()
 
-    @filter.command("tracemoe cut")
-    async def search_anime_cut(self, event: AstrMessageEvent):
-        """搜索动漫场景（自动裁切黑边）- 发送图片来识别动漫出处"""
-        async for result in self._handle_search_request(event, cut_borders=True):
-            yield result
-
     @filter.command("tracemoe")
     async def search_anime(self, event: AstrMessageEvent):
-        """搜索动漫场景 - 发送图片来识别动漫出处"""
-        # 检查是否为子命令，避免冲突
-        message_str = event.message_str.strip()
-        
-        if message_str.startswith("/tracemoe cut") or message_str.startswith("/tracemoe help") or message_str.startswith("/tracemoe me"):
-            return
-            
-        async for result in self._handle_search_request(event, cut_borders=False):
+        """搜索动漫场景（自动裁切黑边）- 发送图片来识别动漫出处"""
+        async for result in self._handle_search_request(event):
             yield result
 
-    async def _handle_search_request(self, event: AstrMessageEvent, cut_borders: bool = False):
+    async def _handle_search_request(self, event: AstrMessageEvent):
         """处理搜索请求，统一的错误处理和消息返回"""
         try:
             images = self.extract_images_from_message(event.get_messages())
@@ -349,8 +328,7 @@ class TraceMoePlugin(Star):
                 yield event.plain_result(
                     "🖼️ 请发送图片来搜索动漫！\n\n"
                     "使用方法：\n"
-                    "• 发送 /tracemoe 并附带图片\n"
-                    "• 发送 /tracemoe cut 并附带图片（自动裁切黑边）\n\n"
+                    "• 发送 /tracemoe 并附带图片（自动裁切黑边）\n\n"
                     "💡 支持的图片格式：jpg, png, gif, webp 等\n"
                     "📏 推荐尺寸：640x360px\n"
                     "📦 文件大小限制：25MB\n"
@@ -361,7 +339,7 @@ class TraceMoePlugin(Star):
             yield event.plain_result("🔍 正在搜索动漫场景，请稍候...")
             
             image_data = await self.download_image_from_component(images[0])
-            result = await self.search_by_image_data(image_data, cut_borders)
+            result = await self.search_by_image_data(image_data, cut_borders=True)
             formatted_result = await self.format_search_result(result)
             
             yield event.chain_result(formatted_result)
