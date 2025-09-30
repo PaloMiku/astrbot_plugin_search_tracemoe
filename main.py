@@ -63,7 +63,6 @@ class TraceMoePlugin(Star):
             
         search_url = f"{self.api_base}/search"
         
-        # 构建请求头，如果有API key则添加
         headers = {}
         if self.api_key:
             headers["x-trace-key"] = self.api_key
@@ -287,7 +286,6 @@ class TraceMoePlugin(Star):
             
             user_id = quota_data.get("id", "未知")
             
-            # 确保所有数值都是整数类型，避免类型错误
             try:
                 priority = int(quota_data.get("priority", 0))
                 concurrency = int(quota_data.get("concurrency", 1))
@@ -295,17 +293,13 @@ class TraceMoePlugin(Star):
                 quota_used = int(quota_data.get("quotaUsed", 0))
             except (ValueError, TypeError) as e:
                 logger.warning(f"配额数据类型转换失败: {e}")
-                # 使用默认值
                 priority, concurrency, quota, quota_used = 0, 1, 0, 0
             
             quota_remaining = quota - quota_used
-            
-            # 计算使用率，避免除零错误
             usage_rate = (quota_used/quota*100) if quota > 0 else 0
             
             quota_info = f"""📊 TraceMoe API 配额信息
 
-🆔 账户标识: {user_id}
 ⚡ 优先级: {priority} (0为最低优先级)
 🔄 并发限制: {concurrency} 个请求
 📈 月度配额: {quota:,} 次
@@ -317,18 +311,19 @@ class TraceMoePlugin(Star):
             if self.api_key:
                 quota_info += "\n🔑 使用 API 密钥认证"
             else:
-                quota_info += f"\n🌐 访客模式 (IP: {user_id})"
+                masked_ip = user_id[:8] + "****" if len(user_id) > 4 else "****"
+                quota_info += f"\n🌐 访客模式 (IP: {masked_ip})"
                 
             yield event.plain_result(quota_info)
+            event.stop_event()
             
         except ValueError as e:
             logger.warning(f"TraceMoe配额查询失败: {e}")
             yield event.plain_result(f"❌ 查询配额失败: {str(e)}")
+            event.stop_event()
         except Exception as e:
             logger.error(f"TraceMoe配额查询出现未知错误: {e}", exc_info=True)
             yield event.plain_result("❌ 查询配额时发生未知错误，请稍后再试")
-        finally:
-            # 停止事件传播，防止触发search_anime方法
             event.stop_event()
 
     @filter.command("tracemoe")
@@ -337,9 +332,7 @@ class TraceMoePlugin(Star):
         try:
             message_str = event.message_str.strip().lower()
             
-            # 检查是否是子指令，避免与其他指令冲突
             if message_str in ["/tracemoe me", "/tracemoe help"] or message_str.startswith("/tracemoe me ") or message_str.startswith("/tracemoe help "):
-                # 停止事件传播并直接返回
                 return
             
             message_chain = event.get_messages()
@@ -358,7 +351,6 @@ class TraceMoePlugin(Star):
                 )
                 return
             
-            # 确保会话已初始化
             if not self.session:
                 await self.initialize()
                 
