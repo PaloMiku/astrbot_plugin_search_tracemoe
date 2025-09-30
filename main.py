@@ -54,18 +54,14 @@ class TraceMoePlugin(Star):
 
     async def search_by_image_data(self, image_data: bytes, cut_borders: bool = False) -> Dict[str, Any]:
         """通过图片二进制数据搜索动漫"""
-        if not self.session:
-            raise RuntimeError("HTTP session not initialized")
-            
+        await self._ensure_session()
+        
         params = {"anilistInfo": ""}
         if cut_borders:
             params["cutBorders"] = ""
             
         search_url = f"{self.api_base}/search"
-        
-        headers = {}
-        if self.api_key:
-            headers["x-trace-key"] = self.api_key
+        headers = self._build_headers()
         
         form_data = aiohttp.FormData()
         form_data.add_field("image", image_data, content_type="image/jpeg")
@@ -79,52 +75,61 @@ class TraceMoePlugin(Star):
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    # 检查 API 返回的错误信息
                     if result.get("error"):
                         raise ValueError(f"API 错误: {result['error']}")
                     return result
-                elif response.status == 400:
-                    raise ValueError("无效的图片数据或处理失败")
-                elif response.status == 402:
-                    raise ValueError("触及 API 并发限制或配额用尽")
-                elif response.status == 413:
-                    raise ValueError("图片文件过大（超过25MB）")
-                elif response.status == 429:
-                    raise ValueError("请求过于频繁，请稍后再试")
-                elif response.status == 503:
-                    raise ValueError("服务暂时不可用，请稍后再试")
-                elif response.status >= 500:
-                    raise ValueError("服务器内部错误，请稍后再试")
                 else:
-                    raise ValueError(f"搜索失败，HTTP状态码: {response.status}")
+                    raise ValueError(self._handle_http_error(response.status, "搜索"))
         except aiohttp.ClientTimeout:
             raise ValueError("搜索请求超时，请稍后再试")
         except aiohttp.ClientError as e:
             raise ValueError(f"网络连接错误: {str(e)}")
 
-    async def get_user_quota(self) -> Dict[str, Any]:
-        """获取用户配额信息"""
-        if not self.session:
-            raise RuntimeError("HTTP session not initialized")
-            
-        me_url = f"{self.api_base}/me"
-        
-        # 构建请求头，如果有API key则添加
+    def _handle_http_error(self, status_code: int, operation: str = "请求") -> str:
+        """统一处理HTTP错误状态码"""
+        if status_code == 400:
+            return "无效的请求数据或处理失败"
+        elif status_code == 402:
+            return "触及 API 并发限制或配额用尽"
+        elif status_code == 403:
+            return "无效的 API 密钥或无权限访问"
+        elif status_code == 404:
+            return "资源不存在或已失效"
+        elif status_code == 413:
+            return "文件过大（超过25MB）"
+        elif status_code == 429:
+            return "请求过于频繁，请稍后再试"
+        elif status_code == 503:
+            return "服务暂时不可用，请稍后再试"
+        elif status_code >= 500:
+            return "服务器内部错误，请稍后再试"
+        else:
+            return f"{operation}失败，HTTP状态码: {status_code}"
+
+    async def _ensure_session(self):
+        """确保HTTP会话已初始化"""
+        if not self.session or self.session.closed:
+            await self.initialize()
+
+    def _build_headers(self) -> Dict[str, str]:
+        """构建请求头"""
         headers = {}
         if self.api_key:
             headers["x-trace-key"] = self.api_key
+        return headers
+
+    async def get_user_quota(self) -> Dict[str, Any]:
+        """获取用户配额信息"""
+        await self._ensure_session()
+        me_url = f"{self.api_base}/me"
+        headers = self._build_headers()
             
         try:
             async with self.session.get(me_url, headers=headers) as response:
                 if response.status == 200:
-                    result = await response.json()
-                    return result
-                elif response.status == 403:
-                    raise ValueError("无效的 API 密钥")
-                elif response.status >= 500:
-                    raise ValueError("服务器内部错误，请稍后再试")
+                    return await response.json()
                 else:
-                    raise ValueError(f"查询配额失败，HTTP状态码: {response.status}")
+                    raise ValueError(self._handle_http_error(response.status, "查询配额"))
         except aiohttp.ClientTimeout:
             raise ValueError("查询请求超时，请稍后再试")
         except aiohttp.ClientError as e:
@@ -217,30 +222,24 @@ class TraceMoePlugin(Star):
 
     async def download_image_from_component(self, image_component: Image) -> bytes:
         """从图片组件下载图片数据"""
-        if not self.session:
-            raise RuntimeError("HTTP session not initialized")
-            
-        if hasattr(image_component, 'url') and image_component.url:
-            try:
-                async with self.session.get(image_component.url) as response:
-                    if response.status == 200:
-                        image_data = await response.read()
-                        # 检查图片大小，符合 API 限制
-                        if len(image_data) > 25 * 1024 * 1024:  # 25MB
-                            raise ValueError("图片文件过大（超过25MB）")
-                        return image_data
-                    elif response.status == 404:
-                        raise ValueError("图片链接不存在或已失效")
-                    elif response.status == 403:
-                        raise ValueError("无权限访问图片链接")
-                    else:
-                        raise ValueError(f"无法下载图片，HTTP状态码: {response.status}")
-            except aiohttp.ClientTimeout:
-                raise ValueError("下载图片超时，请稍后再试")
-            except aiohttp.ClientError as e:
-                raise ValueError(f"网络连接错误: {str(e)}")
-        else:
+        await self._ensure_session()
+        
+        if not (hasattr(image_component, 'url') and image_component.url):
             raise ValueError("无法获取图片数据")
+            
+        try:
+            async with self.session.get(image_component.url) as response:
+                if response.status == 200:
+                    image_data = await response.read()
+                    if len(image_data) > 25 * 1024 * 1024:  # 25MB
+                        raise ValueError("图片文件过大（超过25MB）")
+                    return image_data
+                else:
+                    raise ValueError(self._handle_http_error(response.status, "下载图片"))
+        except aiohttp.ClientTimeout:
+            raise ValueError("下载图片超时，请稍后再试")
+        except aiohttp.ClientError as e:
+            raise ValueError(f"网络连接错误: {str(e)}")
 
     @filter.command("tracemoe help")  
     async def show_info(self, event: AstrMessageEvent):
@@ -270,6 +269,7 @@ class TraceMoePlugin(Star):
 """
 
         yield event.plain_result(info_text)
+        event.stop_event()  # 停止事件传播，防止重复执行
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("tracemoe me")
@@ -329,27 +329,27 @@ class TraceMoePlugin(Star):
     @filter.command("tracemoe cut")
     async def search_anime_cut(self, event: AstrMessageEvent):
         """搜索动漫场景（自动裁切黑边）- 发送图片来识别动漫出处"""
-        async for result in self._search_anime_common(event, cut_borders=True):
+        async for result in self._handle_search_request(event, cut_borders=True):
             yield result
 
     @filter.command("tracemoe")
     async def search_anime(self, event: AstrMessageEvent):
         """搜索动漫场景 - 发送图片来识别动漫出处"""
-        message_str = event.message_str.strip().lower()
-        
-        # 避免与其他子命令冲突
-        if message_str in ["/tracemoe me", "/tracemoe help", "/tracemoe cut"] or message_str.startswith("/tracemoe me ") or message_str.startswith("/tracemoe help ") or message_str.startswith("/tracemoe cut "):
-            return
-            
-        async for result in self._search_anime_common(event, cut_borders=False):
-            yield result
+        # 检查是否为子命令，避免冲突
+        message_str = event.message_str.strip()
+        if message_str.startswith("/tracemoe ") and not message_str.startswith("/tracemoe cut"):
+            # 是带参数的tracemoe命令，但不是cut命令
+            async for result in self._handle_search_request(event, cut_borders=False):
+                yield result
+        elif message_str == "/tracemoe":
+            # 是纯tracemoe命令
+            async for result in self._handle_search_request(event, cut_borders=False):
+                yield result
 
-    async def _search_anime_common(self, event: AstrMessageEvent, cut_borders: bool = False):
-        """通用的动漫搜索处理方法"""
+    async def _handle_search_request(self, event: AstrMessageEvent, cut_borders: bool = False):
+        """处理搜索请求，统一的错误处理和消息返回"""
         try:
-            
-            message_chain = event.get_messages()
-            images = self.extract_images_from_message(message_chain)
+            images = self.extract_images_from_message(event.get_messages())
             
             if not images:
                 yield event.plain_result(
@@ -363,17 +363,13 @@ class TraceMoePlugin(Star):
                     "🔧 需要帮助请发送：/tracemoe help"
                 )
                 return
-            
-            if not self.session:
-                await self.initialize()
                 
             yield event.plain_result("🔍 正在搜索动漫场景，请稍候...")
             
             image_data = await self.download_image_from_component(images[0])
-            
-            result = await self.search_by_image_data(image_data, cut_borders=cut_borders)
-            
+            result = await self.search_by_image_data(image_data, cut_borders)
             formatted_result = await self.format_search_result(result)
+            
             yield event.chain_result(formatted_result)
             
         except ValueError as e:
@@ -381,3 +377,5 @@ class TraceMoePlugin(Star):
         except Exception as e:
             logger.error(f"TraceMoe搜索出现未知错误: {e}", exc_info=True)
             yield event.plain_result("❌ 搜索时发生未知错误，请稍后再试")
+        finally:
+            event.stop_event()  # 确保事件停止，防止重复执行
