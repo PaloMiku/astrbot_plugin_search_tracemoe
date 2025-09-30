@@ -20,15 +20,8 @@
 
   "enable_preview": {
     "type": "bool",
-    "description": "启用预览媒体",
+    "description": "启用图片预览",
     "default": true,
-    "hint": "是否在搜索结果中显示第一条结果的预览图片/视频。"
-  },
-  "preview_type": {
-    "type": "string",
-    "description": "预览媒体类型",
-    "default": "image",
-    "options": ["image", "video"],
-    "hint": "选择预览媒体的类型：image（图片预览）或 video（视频预览）。"
+    "hint": "是否在搜索结果中显示第一条结果的预览图片。"
   }
 }

@@ -3,13 +3,13 @@ from typing import Optional, Dict, Any, List
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger, AstrBotConfig
-from astrbot.api.message_components import Image, Video
+from astrbot.api.message_components import Image
 
 @register(
     "search_tracemoe",
     "PaloMiku",
     "基于 Trace.moe API 的动漫截图场景识别插件",
-    "1.0.5"
+    "1.0.6"
 )
 class TraceMoePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -23,7 +23,6 @@ class TraceMoePlugin(Star):
         
         self.api_key = config.get("api_key", "").strip()
         self.enable_preview = config.get("enable_preview", True)
-        self.preview_type = config.get("preview_type", "image")
         
         self.session: Optional[aiohttp.ClientSession] = None
         
@@ -33,7 +32,7 @@ class TraceMoePlugin(Star):
         else:
             log_msg += "，访客模式"
         if self.enable_preview:
-            log_msg += f"，启用{self.preview_type}预览"
+            log_msg += "，启用图片预览"
         logger.info(log_msg)
 
     async def initialize(self):
@@ -41,7 +40,7 @@ class TraceMoePlugin(Star):
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=30),
             headers={
-                "User-Agent": "AstrBot-TraceMoe-Plugin/1.0.0"
+                "User-Agent": "AstrBot-TraceMoe-Plugin/1.0.6"
             }
         )
         logger.info("TraceMoe 插件初始化完成")
@@ -160,14 +159,11 @@ class TraceMoePlugin(Star):
         if self.enable_preview and results:
             first_result = results[0]
             try:
-                if self.preview_type == "video" and first_result.get("video"):
-                    video_url = first_result["video"] + "?size=m"  # 中等尺寸
-                    message_chain.append(Video.fromURL(video_url))
-                elif self.preview_type == "image" and first_result.get("image"):
+                if first_result.get("image"):
                     image_url = first_result["image"] + "?size=m"  # 中等尺寸
                     message_chain.append(Image.fromURL(image_url))
             except Exception as e:
-                logger.warning(f"加载预览媒体失败: {e}")
+                logger.warning(f"加载预览图片失败: {e}")
         
         # 添加文本结果
         output_lines = ["🔍 动漫场景识别结果：\n"]
