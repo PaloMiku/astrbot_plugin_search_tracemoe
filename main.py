@@ -9,7 +9,7 @@ from astrbot.api.message_components import Image
     "search_tracemoe",
     "PaloMiku",
     "基于 Trace.moe API 的动漫截图场景识别插件",
-    "1.0.6"
+    "1.0.7"
 )
 class TraceMoePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -333,14 +333,12 @@ class TraceMoePlugin(Star):
         """搜索动漫场景 - 发送图片来识别动漫出处"""
         # 检查是否为子命令，避免冲突
         message_str = event.message_str.strip()
-        if message_str.startswith("/tracemoe ") and not message_str.startswith("/tracemoe cut"):
-            # 是带参数的tracemoe命令，但不是cut命令
-            async for result in self._handle_search_request(event, cut_borders=False):
-                yield result
-        elif message_str == "/tracemoe":
-            # 是纯tracemoe命令
-            async for result in self._handle_search_request(event, cut_borders=False):
-                yield result
+        
+        if message_str.startswith("/tracemoe cut") or message_str.startswith("/tracemoe help") or message_str.startswith("/tracemoe me"):
+            return
+            
+        async for result in self._handle_search_request(event, cut_borders=False):
+            yield result
 
     async def _handle_search_request(self, event: AstrMessageEvent, cut_borders: bool = False):
         """处理搜索请求，统一的错误处理和消息返回"""

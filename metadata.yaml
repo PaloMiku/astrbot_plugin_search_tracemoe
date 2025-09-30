@@ -1,5 +1,5 @@
 name: astrbot_plugin_search_tracemoe
 desc: 基于 trace.moe API 的动漫场景识别插件，支持通过图片搜索动漫截图场景出处。支持 API 密钥配置、预览媒体、结果数量可配、配额查询等功能。
-version: v1.0.6
+version: v1.0.7
 author: PaloMiku
 repo: https://github.com/PaloMiku/astrbot_plugin_search_tracemoe
