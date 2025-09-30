@@ -9,7 +9,7 @@ from astrbot.api.message_components import Image, Video
     "search_tracemoe",
     "PaloMiku",
     "基于 Trace.moe API 的动漫截图场景识别插件",
-    "1.0.4"
+    "1.0.5"
 )
 class TraceMoePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -326,14 +326,27 @@ class TraceMoePlugin(Star):
             yield event.plain_result("❌ 查询配额时发生未知错误，请稍后再试")
             event.stop_event()
 
+    @filter.command("tracemoe cut")
+    async def search_anime_cut(self, event: AstrMessageEvent):
+        """搜索动漫场景（自动裁切黑边）- 发送图片来识别动漫出处"""
+        async for result in self._search_anime_common(event, cut_borders=True):
+            yield result
+
     @filter.command("tracemoe")
     async def search_anime(self, event: AstrMessageEvent):
         """搜索动漫场景 - 发送图片来识别动漫出处"""
-        try:
-            message_str = event.message_str.strip().lower()
+        message_str = event.message_str.strip().lower()
+        
+        # 避免与其他子命令冲突
+        if message_str in ["/tracemoe me", "/tracemoe help", "/tracemoe cut"] or message_str.startswith("/tracemoe me ") or message_str.startswith("/tracemoe help ") or message_str.startswith("/tracemoe cut "):
+            return
             
-            if message_str in ["/tracemoe me", "/tracemoe help"] or message_str.startswith("/tracemoe me ") or message_str.startswith("/tracemoe help "):
-                return
+        async for result in self._search_anime_common(event, cut_borders=False):
+            yield result
+
+    async def _search_anime_common(self, event: AstrMessageEvent, cut_borders: bool = False):
+        """通用的动漫搜索处理方法"""
+        try:
             
             message_chain = event.get_messages()
             images = self.extract_images_from_message(message_chain)
@@ -357,8 +370,6 @@ class TraceMoePlugin(Star):
             yield event.plain_result("🔍 正在搜索动漫场景，请稍候...")
             
             image_data = await self.download_image_from_component(images[0])
-            
-            cut_borders = message_str.startswith("/tracemoe cut")
             
             result = await self.search_by_image_data(image_data, cut_borders=cut_borders)
             
