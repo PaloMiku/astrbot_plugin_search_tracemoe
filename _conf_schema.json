@@ -5,10 +5,30 @@
     "default": "https://api.trace.moe",
     "hint": "设置 trace.moe 的 API 基础地址。"
   },
+  "api_key": {
+    "type": "string",
+    "description": "API 密钥（可选）",
+    "default": "",
+    "hint": "设置 trace.moe 的 API 密钥，可提高搜索配额和并发限制，留空则使用访客模式（基于IP地址限制）。"
+  },
   "max_results": {
     "type": "int",
     "description": "最大显示返回结果数量",
     "default": 3,
     "hint": "设置搜索结果最多显示多少条记录（默认为 3 条），数量过多可能导致消息过长。"
+  },
+
+  "enable_preview": {
+    "type": "bool",
+    "description": "启用预览媒体",
+    "default": true,
+    "hint": "是否在搜索结果中显示第一条结果的预览图片/视频。"
+  },
+  "preview_type": {
+    "type": "string",
+    "description": "预览媒体类型",
+    "default": "image",
+    "options": ["image", "video"],
+    "hint": "选择预览媒体的类型：image（图片预览）或 video（视频预览）。"
   }
 }
